@@ -1,44 +1,58 @@
 let WebSocket = require('ws');
 
-function wsWrapper() {
-  const ws = new WebSocket('ws://localhost:4000');
+function wsWrapper(url) {
+  const ws = new WebSocket(url);
 
   let events = {};
 
+   //Create an event handler
+   this.on = function on(event, callback) {
+    events[event] = {callback, once: false};
+    return this;
+  }
+
+  //Create an event handler for one time use
+  this.once = function once(event, callback) {
+    events[event] = {callback, once: true};
+    return this;
+  }
+
+  //Emit message to server
   this.emit = function emit(event, data) {
     const payload = JSON.stringify({event, data});
     ws.send(payload);
     return this;
   }
 
-  this.on = function on(event, callback) {
-    events[event] = callback;
-    return this;
-  }
-  
   ws.on('open', () => {
-    events['open'](ws);
+    events['open'].callback(ws);
   });
 
   ws.on('message', json => {
     const message = JSON.parse(json);
 
-    if (!events[message.event]) {
-      return;
+    //Check if event handler exists & check if event is only to be triggered once
+    if (events[message.event] && !events[message.event].once) {
+      events[message.event].callback(message.data);
+    }
+    else if (events[message.event] && events[message.event].once) {
+      events[message.event].callback(message.data);
+      delete events[message.event];
     }
     else {
-      events[message.event](message.data);
+      return;
     }
   });
 }
 
-let socket = new wsWrapper();
+let socket = new wsWrapper('ws://localhost:4000');
 
 socket.on('open', ws => {
   console.log('connection made');
-  socket.emit('poop', {msg: 'heh'});
-})
 
-setTimeout(() => {
-//
-}, 10000);
+  socket.emit('poop', {});
+});
+
+socket.on('test', data => {
+  console.log(data.msg);
+})
